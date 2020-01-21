@@ -1,0 +1,211 @@
+CREATE  PROCEDURE 	insert_siji(IN xm VARCHAR(20),IN xb CHAR(2),IN c VARCHAR(20))
+BEGIN 
+	INSERT INTO siji (`sj_name`,`sex`,`che_id`)
+	SELECT xm,xb,c
+	FROM xianlu xl,che
+	WHERE che.`che_id` = c AND che.`xl_id` = xl.xl_id ;
+	
+END $
+CREATE PROCEDURE insert_che(IN che_id VARCHAR(20),IN zw INT,IN xl_id INT )
+BEGIN
+	INSERT INTO che (che_id,zw,xl_id) VALUES 
+	(che_id,zw,xl_id);
+END $
+CREATE PROCEDURE insert_xianlu(IN xl_name VARCHAR(20),IN cd_id INTEGER)
+BEGIN
+	INSERT INTO xianlu (`xl_name`,`cd_id`)
+	SELECT xl_name,cd_id
+	FROM DUAL
+	WHERE NOT EXISTS(
+	SELECT *
+	FROM xianlu xl
+	WHERE xl_name = xl.xl_name
+	);
+END $
+CREATE  PROCEDURE 	appoint_cddz(IN id INTEGER,IN cd INTEGER)
+BEGIN 
+	UPDATE siji SET cd_id = (
+	CASE 
+	WHEN 
+	(
+		SELECT cd_id
+		FROM (
+			SELECT * FROM chedui WHERE cddz_id = id
+		      ) mm 
+	)IS NULL
+	THEN cd
+	ELSE cd_id
+	END
+	)WHERE sj_id = id;
+	UPDATE chedui SET cddz_id = (
+	CASE 
+	WHEN 
+	(
+		SELECT cd_id
+		FROM (
+			SELECT * FROM chedui WHERE cddz_id = id
+		      ) mm 
+	)IS NULL
+	THEN id 
+	ELSE cddz_id
+	END
+	)WHERE cd_id = cd;
+
+END $
+CREATE  PROCEDURE 	appoint_xldz(IN id INTEGER)
+BEGIN 
+	UPDATE xianlu SET `xldz_id` = (
+	CASE 
+	WHEN (
+		SELECT xl_id
+		FROM siji
+		WHERE sj_id =  id
+	)IS NOT NULL
+	THEN  id
+	ELSE xldz_id
+	END
+	)WHERE xl_id = (
+		SELECT xl_id
+		FROM siji
+		WHERE sj_id = id
+	);
+END $
+CREATE PROCEDURE insert_weizhangjilu(IN zd INTEGER ,IN t DATETIME,IN sj_id INTEGER,IN wz_id INTEGER,IN che VARCHAR(20))
+BEGIN
+	INSERT INTO weizhangjilu(`zd`,`TIME`,`sj_id`,`wz_id`,`che_id`)
+	SELECT zd,t,sj_id,wz_id,che
+	FROM DUAL
+	WHERE t<=NOW();
+END $
+CREATE PROCEDURE insert_weizhangjilu_4(IN zd INTEGER ,IN t DATETIME,IN sj_id INTEGER,IN wz_id INTEGER)
+BEGIN
+	INSERT INTO weizhangjilu(`zd`,`TIME`,`sj_id`,`wz_id`,`che_id`,`xl_id`,`cd_id`)
+	SELECT zd,t,sj_id,wz_id,sj.che_id,sj.xl_id,sj.cd_id
+	FROM siji sj
+	WHERE sj.sj_id = sj_id AND t<=NOW();
+END $
+CREATE PROCEDURE query_siji_cd(IN cd_id INTEGER)
+BEGIN
+	SELECT t1.sj_id,t1.sj_name,t1.sex,t1.che_id,t1.cd_id,t1.cddz_id,t1.`xl_id`,xl.`xldz_id`
+	FROM (
+	SELECT sj.`sj_id`,sj.`sj_name`,sj.`sex`,sj.`che_id`,sj.`cd_id`,cddz_id,sj.`xl_id`
+	FROM siji sj
+	LEFT OUTER JOIN chedui cd
+	ON cd.cddz_id = sj.`sj_id`
+	WHERE sj.cd_id = cd_id
+	) t1
+	LEFT OUTER JOIN xianlu xl
+	ON xl.`xldz_id` = t1.sj_id;
+END $
+CREATE PROCEDURE query_siji_xl(IN xl_id INTEGER)
+BEGIN
+	SELECT t1.sj_id,t1.sj_name,t1.sex,t1.che_id,t1.cd_id,t1.cddz_id,t1.`xl_id`,xl.`xldz_id`
+	FROM (
+	SELECT sj.`sj_id`,sj.`sj_name`,sj.`sex`,sj.`che_id`,sj.`cd_id`,cddz_id,sj.`xl_id`
+	FROM siji sj
+	LEFT OUTER JOIN chedui cd
+	ON cd.cddz_id = sj.`sj_id`
+	WHERE sj.xl_id = xl_id
+	) t1
+	LEFT OUTER JOIN xianlu xl
+	ON xl.`xldz_id` = t1.sj_id;
+	
+END $
+CREATE PROCEDURE siji_in_all()
+BEGIN
+	SELECT *
+	FROM siji
+	ORDER BY cd_id,xl_id,sj_id;
+END $
+CREATE PROCEDURE siji_wz_time(IN id INTEGER,IN statime DATETIME,IN endtime DATETIME)
+BEGIN 
+	SELECT sj_name,`time`,zd,wz_name,mm.che_id,mm.cd_id,mm.xl_id
+	FROM siji,(
+	SELECT zd,`time`,sj_id,wz_name,xl_id,cd_id,wzjl.che_id
+	FROM weizhangjilu wzjl, weizhangxinxi wzxx
+	WHERE wzjl.wz_id = wzxx.wz_id AND sj_id = id AND wzjl.time BETWEEN statime AND endtime
+	)mm
+	WHERE siji.sj_id = mm.sj_id
+	ORDER BY `time`;
+END $
+CREATE PROCEDURE query_siji(IN sj_id INTEGER)
+BEGIN
+	SELECT sj_id,sj_name,sex,che_id,sj.`cd_id`,xl_name,xldz_id
+	FROM (siji sj
+	LEFT OUTER JOIN chedui cd
+	ON cd.`cd_id` = sj.`cd_id`)
+	LEFT JOIN xianlu xl
+	ON sj.`xl_id` = xl.`xl_id`
+	WHERE sj.sj_id = sj_id;
+END $
+CREATE PROCEDURE xldz_cd_xl(IN sj_id INTEGER)
+BEGIN
+	SELECT xl.xl_id,xl_name,sj_name
+	FROM xianlu xl
+	LEFT JOIN siji sj
+	ON xl.xldz_id = sj.sj_id 
+	WHERE  xl.cd_id = (
+	SELECT cd_id
+	FROM siji sj
+	WHERE sj.sj_id = sj_id
+	);
+	
+END $
+CREATE PROCEDURE apperence_siji()
+BEGIN 
+	SELECT nm.`sj_id`,nm.`sj_name`,nm.`che_id`,nm.`cd_id`,nm.`xl_id`,sj1.`sj_name` 'xldz',sj2.`sj_name` 'cddz'
+	FROM siji sj1
+	RIGHT OUTER JOIN 
+		(
+			SELECT ssj.`sj_id`,ssj.`sj_name`,ssj.`che_id`,ssj.`cd_id`,ssj.`xl_id`,xl.`xldz_id`,cd.`cddz_id`
+			FROM (
+				SELECT sj.`sj_id`,sj.`sj_name`,sj.`che_id`,sj.`cd_id`,sj.`xl_id`
+				FROM siji sj
+				WHERE sj.`sj_id` = (SELECT MAX(sj_id) FROM siji)
+				)ssj,chedui cd,xianlu xl
+			WHERE ssj.xl_id = xl.`xl_id` AND ssj.cd_id = cd.`cd_id`
+		)nm
+	ON sj1.`sj_id` = nm.xldz_id
+	LEFT OUTER JOIN siji sj2 ON  sj2.`sj_id` = nm.cddz_id ;
+END $
+CREATE PROCEDURE query_xl_cd(IN cd_id INTEGER)
+BEGIN
+	SELECT xl.xl_id,xl_name,sj_name 
+	FROM xianlu xl
+	LEFT OUTER JOIN siji sj 
+	ON xl.xldz_id = sj.sj_id WHERE xl.cd_id = cd_id;
+END $
+CREATE PROCEDURE siji_wz_all(IN sj_id INTEGER )
+BEGIN 
+	SELECT `time`,wz_name,sj_name,wzjl.che_id,wzjl.xl_id,wzjl.cd_id
+	FROM weizhangjilu wzjl,siji sj,weizhangxinxi wzxx
+	WHERE sj.`sj_id` = wzjl.`sj_id` AND wzjl.`wz_id` = wzxx.wz_id 
+	AND sj.sj_id = sj_id
+	ORDER BY wzjl.time;
+END $
+CREATE PROCEDURE chedui_wz_time(IN cd_id INTEGER,IN statime DATETIME,IN endtime DATETIME)
+BEGIN
+	SELECT wz_name,num
+	FROM (
+	SELECT wz_id,COUNT(*) num
+	FROM weizhangjilu wzjl
+	WHERE wzjl.cd_id = cd_id
+	AND wzjl.time BETWEEN statime AND endtime
+	GROUP BY wz_id
+	) mm,weizhangxinxi wzxx
+	WHERE mm.wz_id = wzxx.wz_id;
+	
+END $
+CREATE PROCEDURE query_Xianlu()
+BEGIN
+	SELECT xl.xl_id,xl_name,sj_name
+	FROM xianlu xl 
+	LEFT OUTER JOIN siji sj 
+	ON xl.xldz_id = sj.sj_id;
+END $
+CREATE PROCEDURE query_Chedui()
+BEGIN
+	SELECT cd.cd_id,sj_name,sj.sj_id 
+	FROM chedui cd LEFT OUTER JOIN siji sj 
+	ON sj.`sj_id` = cd.cddz_id ORDER BY cd.cd_id;
+END $
